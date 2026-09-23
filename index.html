@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>線形変換シミュレーター（「あ」の変形）</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background-color: #f4f6f8;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    h1 {
+      margin-bottom: 10px;
+      color: #333;
+    }
+    .container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      justify-content: center;
+      max-width: 1000px;
+      width: 100%;
+    }
+    .canvas-card {
+      background: #fff;
+      padding: 15px;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    canvas {
+      border: 1px solid #ccc;
+      background-color: #ffffff;
+      display: block;
+    }
+    .control-card {
+      background: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      flex: 1;
+      min-width: 300px;
+    }
+    .matrix-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+      margin-bottom: 20px;
+      background: #f8f9fa;
+      padding: 15px;
+      border-radius: 6px;
+      border-left: 4px solid #4a90e2;
+    }
+    .slider-group {
+      display: flex;
+      flex-direction: column;
+    }
+    .slider-group label {
+      font-weight: bold;
+      font-size: 14px;
+      margin-bottom: 5px;
+    }
+    .slider-group input {
+      width: 100%;
+    }
+    .info-box {
+      margin-top: 15px;
+      padding: 12px;
+      border-radius: 6px;
+      font-size: 16px;
+      font-weight: bold;
+    }
+    .det-positive { background-color: #e6f4ea; color: #137333; }
+    .det-zero     { background-color: #feefc3; color: #b06000; }
+    .det-negative { background-color: #fce8e6; color: #c5221f; }
+    
+    .preset-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 15px;
+    }
+    .preset-buttons button {
+      padding: 8px 12px;
+      border: none;
+      background-color: #4a90e2;
+      color: white;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: background 0.2s;
+    }
+    .preset-buttons button:hover {
+      background-color: #357abd;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>線形変換シミュレーター</h1>
+  <p style="color: #666; margin-top:0;">行列成分を変えて、単位正方形と文字「あ」の空間変形を観察しよう</p>
+
+  <div class="container">
+    <div class="canvas-card">
+      <canvas id="canvas" width="500" height="500"></canvas>
+    </div>
+
+    <div class="control-card">
+      <h3>表現行列 $A = \begin{pmatrix} a & b \\ c & d \end{pmatrix}$</h3>
+      
+      <div class="matrix-grid">
+        <div class="slider-group">
+          <label>a = <span id="val-a">1.0</span></label>
+          <input type="range" id="slider-a" min="-3" max="3" step="0.1" value="1">
+        </div>
+        <div class="slider-group">
+          <label>b = <span id="val-b">0.0</span></label>
+          <input type="range" id="slider-b" min="-3" max="3" step="0.1" value="0">
+        </div>
+        <div class="slider-group">
+          <label>c = <span id="val-c">0.0</span></label>
+          <input type="range" id="slider-c" min="-3" max="3" step="0.1" value="0">
+        </div>
+        <div class="slider-group">
+          <label>d = <span id="val-d">1.0</span></label>
+          <input type="range" id="slider-d" min="-3" max="3" step="0.1" value="1">
+        </div>
+      </div>
+
+      <div id="info-box" class="info-box det-positive">
+        行列式 det(A) = <span id="val-det">1.00</span>
+        <div id="status-text" style="font-size: 13px; font-weight: normal; margin-top: 4px;">状態: 向きを保持（通常）</div>
+      </div>
+
+      <h4>プリセット変換</h4>
+      <div class="preset-buttons">
+        <button onclick="setMatrix(1, 0, 0, 1)">恒等変換 (単位行列)</button>
+        <button onclick="setMatrix(1, 1, 0, 1)">シアー (せん断)</button>
+        <button onclick="setMatrix(0.7, -0.7, 0.7, 0.7)">45度回転</button>
+        <button onclick="setMatrix(1, 1, 1, 1)">潰れ (det=0)</button>
+        <button onclick="setMatrix(-1, 0, 0, 1)">y軸で折り返し (裏返し)</button>
+        <button onclick="setMatrix(0, 1, 1, 0)">y=xで鏡映 (裏返し)</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    // スライダー・値表示要素
+    const sliders = {
+      a: document.getElementById('slider-a'),
+      b: document.getElementById('slider-b'),
+      c: document.getElementById('slider-c'),
+      d: document.getElementById('slider-d')
+    };
+    const values = {
+      a: document.getElementById('val-a'),
+      b: document.getElementById('val-b'),
+      c: document.getElementById('val-c'),
+      d: document.getElementById('val-d'),
+      det: document.getElementById('val-det')
+    };
+    const infoBox = document.getElementById('info-box');
+    const statusText = document.getElementById('status-text');
+
+    const SCALE = 60; // 1単位あたりのピクセル数
+    const CENTER_X = canvas.width / 2;
+    const CENTER_Y = canvas.height / 2;
+
+    function toScreenX(x) { return CENTER_X + x * SCALE; }
+    function toScreenY(y) { return CENTER_Y - y * SCALE; }
+
+    function draw() {
+      const a = parseFloat(sliders.a.value);
+      const b = parseFloat(sliders.b.value);
+      const c = parseFloat(sliders.c.value);
+      const d = parseFloat(sliders.d.value);
+
+      values.a.textContent = a.toFixed(1);
+      values.b.textContent = b.toFixed(1);
+      values.c.textContent = c.toFixed(1);
+      values.d.textContent = d.toFixed(1);
+
+      const det = a * d - b * c;
+      values.det.textContent = det.toFixed(2);
+
+      // 行列式に応じた背景色とステータス変化
+      if (Math.abs(det) < 0.05) {
+        infoBox.className = "info-box det-zero";
+        statusText.textContent = "状態: 空間がペシャンコに潰れた (次元低下 / Ker発生)";
+      } else if (det < 0) {
+        infoBox.className = "info-box det-negative";
+        statusText.textContent = "状態: 空間が【裏返し】になった (鏡文字)";
+      } else {
+        infoBox.className = "info-box det-positive";
+        statusText.textContent = "状態: 向きを保持 (回転・伸縮・変形)";
+      }
+
+      // 画面クリア
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // 座標軸描画
+      ctx.strokeStyle = '#e0e0e0';
+      ctx.lineWidth = 1;
+      for (let i = -5; i <= 5; i++) {
+        ctx.beginPath(); ctx.moveTo(toScreenX(i), 0); ctx.lineTo(toScreenX(i), canvas.height); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, toScreenY(i)); ctx.lineTo(canvas.width, toScreenY(i)); ctx.stroke();
+      }
+
+      ctx.strokeStyle = '#888';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(0, CENTER_Y); ctx.lineTo(canvas.width, CENTER_Y); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(CENTER_X, 0); ctx.lineTo(CENTER_X, canvas.height); ctx.stroke();
+
+      // --- 1. 元の単位正方形 (点線) ---
+      ctx.strokeStyle = '#aaa';
+      ctx.setLineDash([4, 4]);
+      ctx.strokeRect(toScreenX(0), toScreenY(1), SCALE, SCALE);
+      ctx.setLineDash([]);
+
+      // --- 2. 変換後の領域（平行四辺形） ---
+      const p0 = {x: 0, y: 0};
+      const p1 = {x: a, y: c};             // e1の行き先
+      const p2 = {x: a + b, y: c + d};
+      const p3 = {x: b, y: d};             // e2の行き先
+
+      ctx.beginPath();
+      ctx.moveTo(toScreenX(p0.x), toScreenY(p0.y));
+      ctx.lineTo(toScreenX(p1.x), toScreenY(p1.y));
+      ctx.lineTo(toScreenX(p2.x), toScreenY(p2.y));
+      ctx.lineTo(toScreenX(p3.x), toScreenY(p3.y));
+      ctx.closePath();
+
+      if (det < 0) {
+        ctx.fillStyle = 'rgba(234, 67, 53, 0.25)'; // 裏返しのときは赤系
+      } else if (Math.abs(det) < 0.05) {
+        ctx.fillStyle = 'rgba(251, 188, 4, 0.4)';  // 潰れたときは黄色系
+      } else {
+        ctx.fillStyle = 'rgba(66, 133, 244, 0.25)'; // 通常は青系
+      }
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = (det < 0) ? '#d93025' : '#1a73e8';
+      ctx.stroke();
+
+      // --- 3. 変換後の「あ」の文字描画 (Affinity Canvas Transform) ---
+      ctx.save();
+      // Canvasのアフィン変換行列を設定 [m11, m12, m21, m22, dx, dy]
+      // Y軸がCanvasと数学座標系で上下逆なのを考慮して補正
+      ctx.transform(a, -c, -b, d, CENTER_X, CENTER_Y);
+      
+      ctx.font = 'bold 45px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = (det < 0) ? '#b31412' : '#155724';
+      
+      // 単位正方形の中心 (0.5, 0.5) に文字を描画 (Y方向はCanvas座標系なので-0.5)
+      ctx.fillText('あ', 0.5 * SCALE, -0.5 * SCALE);
+      ctx.restore();
+
+      // --- 4. 基底ベクトルの描画 ---
+      drawArrow(p0, p1, '#e53935'); // e1 の行き先 (赤)
+      drawArrow(p0, p3, '#43a047'); // e2 の行き先 (緑)
+    }
+
+    function drawArrow(from, to, color) {
+      const headlen = 10;
+      const fromX = toScreenX(from.x);
+      const fromY = toScreenY(from.y);
+      const toX = toScreenX(to.x);
+      const toY = toScreenY(to.y);
+      const angle = Math.atan2(toY - fromY, toX - fromX);
+
+      ctx.strokeStyle = color;
+      ctx.fillStyle = color;
+      ctx.lineWidth = 3;
+
+      ctx.beginPath();
+      ctx.moveTo(fromX, fromY);
+      ctx.lineTo(toX, toY);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(toX, toY);
+      ctx.lineTo(toX - headlen * Math.cos(angle - Math.PI / 6), toY - headlen * Math.sin(angle - Math.PI / 6));
+      ctx.lineTo(toX - headlen * Math.cos(angle + Math.PI / 6), toY - headlen * Math.sin(angle + Math.PI / 6));
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    function setMatrix(a, b, c, d) {
+      sliders.a.value = a;
+      sliders.b.value = b;
+      sliders.c.value = c;
+      sliders.d.value = d;
+      draw();
+    }
+
+    Object.values(sliders).forEach(slider => {
+      slider.addEventListener('input', draw);
+    });
+
+    // 初期描画
+    draw();
+  </script>
+</body>
+</html>
