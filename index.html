@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>線形変換シミュレーター（「あ」の変形）</title>
+  <title>線形変換シミュレーター（空間メッシュの変形）</title>
   <style>
     body {
       font-family: sans-serif;
@@ -101,7 +101,7 @@
 <body>
 
   <h1>線形変換シミュレーター</h1>
-  <p style="color: #666; margin-top:0;">行列成分を変えて、単位正方形と文字「あ」の空間変形を観察しよう</p>
+  <p style="color: #666; margin-top:0;">空間全体のメッシュが歪む・裏返る様子を観察しよう</p>
 
   <div class="container">
     <div class="canvas-card">
@@ -109,7 +109,7 @@
     </div>
 
     <div class="control-card">
-      <h3>表現行列 $A = \begin{pmatrix} a & b \\ c & d \end{pmatrix}$</h3>
+      <h3>表現行列 A = <span style="font-family: serif;">[a, b; c, d]</span></h3>
       
       <div class="matrix-grid">
         <div class="slider-group">
@@ -151,7 +151,6 @@
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
     
-    // スライダー・値表示要素
     const sliders = {
       a: document.getElementById('slider-a'),
       b: document.getElementById('slider-b'),
@@ -168,7 +167,7 @@
     const infoBox = document.getElementById('info-box');
     const statusText = document.getElementById('status-text');
 
-    const SCALE = 60; // 1単位あたりのピクセル数
+    const SCALE = 50; // 1単位あたりのピクセル数
     const CENTER_X = canvas.width / 2;
     const CENTER_Y = canvas.height / 2;
 
@@ -189,41 +188,61 @@
       const det = a * d - b * c;
       values.det.textContent = det.toFixed(2);
 
-      // 行列式に応じた背景色とステータス変化
+      // ステータス表示の更新
       if (Math.abs(det) < 0.05) {
         infoBox.className = "info-box det-zero";
-        statusText.textContent = "状態: 空間がペシャンコに潰れた (次元低下 / Ker発生)";
+        statusText.textContent = "状態: 空間全体が直線上にペシャンコに潰れた (det = 0)";
       } else if (det < 0) {
         infoBox.className = "info-box det-negative";
-        statusText.textContent = "状態: 空間が【裏返し】になった (鏡文字)";
+        statusText.textContent = "状態: 空間全体が【裏返し】になった (鏡文字)";
       } else {
         infoBox.className = "info-box det-positive";
-        statusText.textContent = "状態: 向きを保持 (回転・伸縮・変形)";
+        statusText.textContent = "状態: 向きを保持 (回転・伸縮・歪み)";
       }
 
-      // 画面クリア
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // 座標軸描画
-      ctx.strokeStyle = '#e0e0e0';
+      // --- 1. 背景の薄い固定座標軸 ---
+      ctx.strokeStyle = '#f0f0f0';
       ctx.lineWidth = 1;
-      for (let i = -5; i <= 5; i++) {
+      for (let i = -6; i <= 6; i++) {
         ctx.beginPath(); ctx.moveTo(toScreenX(i), 0); ctx.lineTo(toScreenX(i), canvas.height); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(0, toScreenY(i)); ctx.lineTo(canvas.width, toScreenY(i)); ctx.stroke();
       }
 
-      ctx.strokeStyle = '#888';
-      ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.moveTo(0, CENTER_Y); ctx.lineTo(canvas.width, CENTER_Y); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(CENTER_X, 0); ctx.lineTo(CENTER_X, canvas.height); ctx.stroke();
+      // --- 2. 変換後の空間メッシュ（全体に広がる格子線） ---
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = (det < 0) ? 'rgba(217, 48, 37, 0.35)' : 'rgba(26, 115, 232, 0.35)';
 
-      // --- 1. 元の単位正方形 (点線) ---
-      ctx.strokeStyle = '#aaa';
-      ctx.setLineDash([4, 4]);
-      ctx.strokeRect(toScreenX(0), toScreenY(1), SCALE, SCALE);
-      ctx.setLineDash([]);
+      const RANGE = 6; // 格子を描画する範囲 (-6 から +6)
+      
+      // 縦方向の格子線（x = i の直線が変形したもの）
+      for (let i = -RANGE; i <= RANGE; i++) {
+        const startX = a * i + b * (-RANGE);
+        const startY = c * i + d * (-RANGE);
+        const endX   = a * i + b * RANGE;
+        const endY   = c * i + d * RANGE;
+        
+        ctx.beginPath();
+        ctx.moveTo(toScreenX(startX), toScreenY(startY));
+        ctx.lineTo(toScreenX(endX), toScreenY(endY));
+        ctx.stroke();
+      }
 
-      // --- 2. 変換後の領域（平行四辺形） ---
+      // 横方向の格子線（y = j の直線が変形したもの）
+      for (let j = -RANGE; j <= RANGE; j++) {
+        const startX = a * (-RANGE) + b * j;
+        const startY = c * (-RANGE) + d * j;
+        const endX   = a * RANGE + b * j;
+        const endY   = c * RANGE + d * j;
+        
+        ctx.beginPath();
+        ctx.moveTo(toScreenX(startX), toScreenY(startY));
+        ctx.lineTo(toScreenX(endX), toScreenY(endY));
+        ctx.stroke();
+      }
+
+      // --- 3. 単位正方形（0<=x<=1, 0<=y<=1 のコマだけハイライト） ---
       const p0 = {x: 0, y: 0};
       const p1 = {x: a, y: c};             // e1の行き先
       const p2 = {x: a + b, y: c + d};
@@ -237,35 +256,34 @@
       ctx.closePath();
 
       if (det < 0) {
-        ctx.fillStyle = 'rgba(234, 67, 53, 0.25)'; // 裏返しのときは赤系
+        ctx.fillStyle = 'rgba(234, 67, 53, 0.3)';  // 裏返し：赤
       } else if (Math.abs(det) < 0.05) {
-        ctx.fillStyle = 'rgba(251, 188, 4, 0.4)';  // 潰れたときは黄色系
+        ctx.fillStyle = 'rgba(251, 188, 4, 0.5)'; // 潰れ：黄
       } else {
-        ctx.fillStyle = 'rgba(66, 133, 244, 0.25)'; // 通常は青系
+        ctx.fillStyle = 'rgba(66, 133, 244, 0.3)'; // 通常：青
       }
       ctx.fill();
       ctx.lineWidth = 2;
       ctx.strokeStyle = (det < 0) ? '#d93025' : '#1a73e8';
       ctx.stroke();
 
-      // --- 3. 変換後の「あ」の文字描画 (Affinity Canvas Transform) ---
+      // --- 4. 単位正方形のコマだけに「あ」の文字を描画 ---
       ctx.save();
-      // Canvasのアフィン変換行列を設定 [m11, m12, m21, m22, dx, dy]
-      // Y軸がCanvasと数学座標系で上下逆なのを考慮して補正
+      // Canvas座標系のアフィン変換
       ctx.transform(a, -c, -b, d, CENTER_X, CENTER_Y);
       
-      ctx.font = 'bold 45px sans-serif';
+      ctx.font = 'bold 38px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = (det < 0) ? '#b31412' : '#155724';
       
-      // 単位正方形の中心 (0.5, 0.5) に文字を描画 (Y方向はCanvas座標系なので-0.5)
+      // (0.5, 0.5) のコマの中央に配置
       ctx.fillText('あ', 0.5 * SCALE, -0.5 * SCALE);
       ctx.restore();
 
-      // --- 4. 基底ベクトルの描画 ---
-      drawArrow(p0, p1, '#e53935'); // e1 の行き先 (赤)
-      drawArrow(p0, p3, '#43a047'); // e2 の行き先 (緑)
+      // --- 5. 基底ベクトルの矢印描画 ---
+      drawArrow(p0, p1, '#e53935'); // e1 (赤)
+      drawArrow(p0, p3, '#43a047'); // e2 (緑)
     }
 
     function drawArrow(from, to, color) {
@@ -305,7 +323,6 @@
       slider.addEventListener('input', draw);
     });
 
-    // 初期描画
     draw();
   </script>
 </body>
