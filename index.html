@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>線形変換シミュレーター（空間メッシュの変形）</title>
+  <title>線形変換シミュレーター（空間メッシュと単位円・楕円）</title>
   <style>
     body {
       font-family: sans-serif;
@@ -44,6 +44,33 @@
       flex: 1;
       min-width: 300px;
     }
+    
+    /* 2x2 MatrixForm スタイル */
+    .matrix-title {
+      display: flex;
+      align-items: center;
+      font-size: 18px;
+      font-weight: bold;
+      margin-bottom: 15px;
+    }
+    .matrix-brackets {
+      display: inline-flex;
+      border-left: 2px solid #333;
+      border-right: 2px solid #333;
+      border-radius: 6px;
+      padding: 2px 8px;
+      margin: 0 6px;
+      align-items: center;
+    }
+    .matrix-grid-display {
+      display: grid;
+      grid-template-columns: auto auto;
+      gap: 4px 12px;
+      text-align: center;
+      font-family: serif;
+      font-size: 20px;
+    }
+
     .matrix-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -101,7 +128,7 @@
 <body>
 
   <h1>線形変換シミュレーター</h1>
-  <p style="color: #666; margin-top:0;">空間全体のメッシュが歪む・裏返る様子を観察しよう</p>
+  <p style="color: #666; margin-top:0;">空間メッシュと「あ」、そして単位円が楕円へ変形する様子を観察しよう</p>
 
   <div class="container">
     <div class="canvas-card">
@@ -109,7 +136,16 @@
     </div>
 
     <div class="control-card">
-      <h3>表現行列 A = <span style="font-family: serif;">[a, b; c, d]</span></h3>
+      <!-- 縦書き MatrixForm 表示 -->
+      <div class="matrix-title">
+        表現行列 <i>A</i> = 
+        <div class="matrix-brackets">
+          <div class="matrix-grid-display">
+            <span id="disp-a">1</span><span id="disp-b">0</span>
+            <span id="disp-c">0</span><span id="disp-d">1</span>
+          </div>
+        </div>
+      </div>
       
       <div class="matrix-grid">
         <div class="slider-group">
@@ -164,6 +200,12 @@
       d: document.getElementById('val-d'),
       det: document.getElementById('val-det')
     };
+    const disp = {
+      a: document.getElementById('disp-a'),
+      b: document.getElementById('disp-b'),
+      c: document.getElementById('disp-c'),
+      d: document.getElementById('disp-d')
+    };
     const infoBox = document.getElementById('info-box');
     const statusText = document.getElementById('status-text');
 
@@ -184,6 +226,12 @@
       values.b.textContent = b.toFixed(1);
       values.c.textContent = c.toFixed(1);
       values.d.textContent = d.toFixed(1);
+
+      // MatrixForm（数式風表示）の更新
+      disp.a.textContent = a.toFixed(1);
+      disp.b.textContent = b.toFixed(1);
+      disp.c.textContent = c.toFixed(1);
+      disp.d.textContent = d.toFixed(1);
 
       const det = a * d - b * c;
       values.det.textContent = det.toFixed(2);
@@ -214,39 +262,33 @@
       ctx.lineWidth = 1;
       ctx.strokeStyle = (det < 0) ? 'rgba(217, 48, 37, 0.35)' : 'rgba(26, 115, 232, 0.35)';
 
-      const RANGE = 6; // 格子を描画する範囲 (-6 から +6)
-      
-      // 縦方向の格子線（x = i の直線が変形したもの）
+      const RANGE = 6;
       for (let i = -RANGE; i <= RANGE; i++) {
         const startX = a * i + b * (-RANGE);
         const startY = c * i + d * (-RANGE);
         const endX   = a * i + b * RANGE;
         const endY   = c * i + d * RANGE;
-        
         ctx.beginPath();
         ctx.moveTo(toScreenX(startX), toScreenY(startY));
         ctx.lineTo(toScreenX(endX), toScreenY(endY));
         ctx.stroke();
       }
-
-      // 横方向の格子線（y = j の直線が変形したもの）
       for (let j = -RANGE; j <= RANGE; j++) {
         const startX = a * (-RANGE) + b * j;
         const startY = c * (-RANGE) + d * j;
         const endX   = a * RANGE + b * j;
         const endY   = c * RANGE + d * j;
-        
         ctx.beginPath();
         ctx.moveTo(toScreenX(startX), toScreenY(startY));
         ctx.lineTo(toScreenX(endX), toScreenY(endY));
         ctx.stroke();
       }
 
-      // --- 3. 単位正方形（0<=x<=1, 0<=y<=1 のコマだけハイライト） ---
+      // --- 3. 単位正方形 (コマ) ---
       const p0 = {x: 0, y: 0};
-      const p1 = {x: a, y: c};             // e1の行き先
+      const p1 = {x: a, y: c};
       const p2 = {x: a + b, y: c + d};
-      const p3 = {x: b, y: d};             // e2の行き先
+      const p3 = {x: b, y: d};
 
       ctx.beginPath();
       ctx.moveTo(toScreenX(p0.x), toScreenY(p0.y));
@@ -256,32 +298,61 @@
       ctx.closePath();
 
       if (det < 0) {
-        ctx.fillStyle = 'rgba(234, 67, 53, 0.3)';  // 裏返し：赤
+        ctx.fillStyle = 'rgba(234, 67, 53, 0.25)';
       } else if (Math.abs(det) < 0.05) {
-        ctx.fillStyle = 'rgba(251, 188, 4, 0.5)'; // 潰れ：黄
+        ctx.fillStyle = 'rgba(251, 188, 4, 0.4)';
       } else {
-        ctx.fillStyle = 'rgba(66, 133, 244, 0.3)'; // 通常：青
+        ctx.fillStyle = 'rgba(66, 133, 244, 0.25)';
       }
       ctx.fill();
       ctx.lineWidth = 2;
       ctx.strokeStyle = (det < 0) ? '#d93025' : '#1a73e8';
       ctx.stroke();
 
-      // --- 4. 単位正方形のコマだけに「あ」の文字を描画 ---
+      // --- 4. 変換前の「単位円」（点線で固定表示） ---
+      ctx.strokeStyle = '#888';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.arc(CENTER_X, CENTER_Y, SCALE, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // --- 5. 変換後の「楕円」（実線で描画） ---
+      ctx.strokeStyle = (det < 0) ? '#e37400' : '#8e24aa'; // 楕円を強調する紫色（裏返し時はオレンジ）
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      const STEPS = 100;
+      for (let i = 0; i <= STEPS; i++) {
+        const theta = (i / STEPS) * Math.PI * 2;
+        const ux = Math.cos(theta);
+        const uy = Math.sin(theta);
+        // 行列 M*[ux, uy]^T
+        const tx = a * ux + b * uy;
+        const ty = c * ux + d * uy;
+
+        const sx = toScreenX(tx);
+        const sy = toScreenY(ty);
+        if (i === 0) {
+          ctx.moveTo(sx, sy);
+        } else {
+          ctx.lineTo(sx, sy);
+        }
+      }
+      ctx.closePath();
+      ctx.stroke();
+
+      // --- 6. 「あ」の文字を描画 ---
       ctx.save();
-      // Canvas座標系のアフィン変換
       ctx.transform(a, -c, -b, d, CENTER_X, CENTER_Y);
-      
       ctx.font = 'bold 38px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = (det < 0) ? '#b31412' : '#155724';
-      
-      // (0.5, 0.5) のコマの中央に配置
       ctx.fillText('あ', 0.5 * SCALE, -0.5 * SCALE);
       ctx.restore();
 
-      // --- 5. 基底ベクトルの矢印描画 ---
+      // --- 7. 基底ベクトル ---
       drawArrow(p0, p1, '#e53935'); // e1 (赤)
       drawArrow(p0, p3, '#43a047'); // e2 (緑)
     }
