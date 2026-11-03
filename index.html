@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>線形変換シミュレーター（空間メッシュと単位円・楕円）</title>
+  <title>線形変換シミュレーター（メッシュ・固有値・固有ベクトル）</title>
   <style>
     body {
       font-family: sans-serif;
@@ -42,7 +42,7 @@
       border-radius: 8px;
       box-shadow: 0 4px 6px rgba(0,0,0,0.1);
       flex: 1;
-      min-width: 300px;
+      min-width: 320px;
     }
     
     /* 2x2 MatrixForm スタイル */
@@ -95,14 +95,24 @@
     }
     .info-box {
       margin-top: 15px;
-      padding: 12px;
+      padding: 15px;
       border-radius: 6px;
-      font-size: 16px;
-      font-weight: bold;
+      font-size: 15px;
     }
     .det-positive { background-color: #e6f4ea; color: #137333; }
     .det-zero     { background-color: #feefc3; color: #b06000; }
     .det-negative { background-color: #fce8e6; color: #c5221f; }
+
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+      font-weight: bold;
+    }
+    .info-row:last-child {
+      margin-bottom: 0;
+    }
     
     .preset-buttons {
       display: flex;
@@ -128,7 +138,7 @@
 <body>
 
   <h1>線形変換シミュレーター</h1>
-  <p style="color: #666; margin-top:0;">空間メッシュと「あ」、そして単位円が楕円へ変形する様子を観察しよう</p>
+  <p style="color: #666; margin-top:0;">空間メッシュ・楕円・行列式・固有値・固有ベクトル（シアン矢印）を観察しよう</p>
 
   <div class="container">
     <div class="canvas-card">
@@ -166,9 +176,19 @@
         </div>
       </div>
 
+      <!-- 情報表示ボックス -->
       <div id="info-box" class="info-box det-positive">
-        行列式 det(A) = <span id="val-det">1.00</span>
-        <div id="status-text" style="font-size: 13px; font-weight: normal; margin-top: 4px;">状態: 向きを保持（通常）</div>
+        <div class="info-row">
+          <span>行列式 det(A):</span>
+          <span id="val-det">1.00</span>
+        </div>
+        <div class="info-row">
+          <span>固有値 λ₁, λ₂:</span>
+          <span id="val-eigen">1.00, 1.00</span>
+        </div>
+        <div id="status-text" style="font-size: 13px; font-weight: normal; margin-top: 8px; border-top: 1px solid rgba(0,0,0,0.1); padding-top: 6px;">
+          状態: 向きを保持（通常）
+        </div>
       </div>
 
       <h4>プリセット変換</h4>
@@ -198,7 +218,8 @@
       b: document.getElementById('val-b'),
       c: document.getElementById('val-c'),
       d: document.getElementById('val-d'),
-      det: document.getElementById('val-det')
+      det: document.getElementById('val-det'),
+      eigen: document.getElementById('val-eigen')
     };
     const disp = {
       a: document.getElementById('disp-a'),
@@ -209,7 +230,7 @@
     const infoBox = document.getElementById('info-box');
     const statusText = document.getElementById('status-text');
 
-    const SCALE = 50; // 1単位あたりのピクセル数
+    const SCALE = 50;
     const CENTER_X = canvas.width / 2;
     const CENTER_Y = canvas.height / 2;
 
@@ -227,7 +248,6 @@
       values.c.textContent = c.toFixed(1);
       values.d.textContent = d.toFixed(1);
 
-      // MatrixForm（数式風表示）の更新
       disp.a.textContent = a.toFixed(1);
       disp.b.textContent = b.toFixed(1);
       disp.c.textContent = c.toFixed(1);
@@ -235,6 +255,53 @@
 
       const det = a * d - b * c;
       values.det.textContent = det.toFixed(2);
+
+      // --- 固有値と固有ベクトルの計算 ---
+      const tr = a + d;
+      const discriminant = tr * tr - 4 * det;
+      let eigenStr = "";
+      let eigenVectors = []; // 描画用固有ベクトル格納配列
+
+      if (discriminant >= 0) {
+        const l1 = (tr + Math.sqrt(discriminant)) / 2;
+        const l2 = (tr - Math.sqrt(discriminant)) / 2;
+        
+        if (Math.abs(l1 - l2) < 0.001) {
+          eigenStr = `${l1.toFixed(2)} (重解)`;
+        } else {
+          eigenStr = `${l1.toFixed(2)}, ${l2.toFixed(2)}`;
+        }
+
+        // 固有ベクトルの計算 v1, v2
+        [l1, l2].forEach(lambda => {
+          let vx = 0, vy = 0;
+          if (Math.abs(b) > 0.0001) {
+            vx = 1; vy = (lambda - a) / b;
+          } else if (Math.abs(c) > 0.0001) {
+            vx = (lambda - d) / c; vy = 1;
+          } else {
+            // 対角行列の場合
+            if (Math.abs(lambda - a) < 0.0001) { vx = 1; vy = 0; }
+            else { vx = 0; vy = 1; }
+          }
+          // 変換後の固有ベクトル (A * v = lambda * v)
+          // 変換後の行き先の方向（大きさ2に正規化）
+          const tx = a * vx + b * vy;
+          const ty = c * vx + d * vy;
+          const tlen = Math.hypot(tx, ty);
+
+          if (tlen > 0.0001) {
+            // 長さ2に設定
+            eigenVectors.push({ x: (tx / tlen) * 2, y: (ty / tlen) * 2 });
+          }
+        });
+
+      } else {
+        const real = (tr / 2).toFixed(2);
+        const imag = (Math.sqrt(-discriminant) / 2).toFixed(2);
+        eigenStr = `${real} ± ${imag}i`;
+      }
+      values.eigen.textContent = eigenStr;
 
       // ステータス表示の更新
       if (Math.abs(det) < 0.05) {
@@ -319,7 +386,7 @@
       ctx.setLineDash([]);
 
       // --- 5. 変換後の「楕円」（実線で描画） ---
-      ctx.strokeStyle = (det < 0) ? '#e37400' : '#8e24aa'; // 楕円を強調する紫色（裏返し時はオレンジ）
+      ctx.strokeStyle = (det < 0) ? '#e37400' : '#8e24aa';
       ctx.lineWidth = 2.5;
       ctx.beginPath();
       const STEPS = 100;
@@ -327,7 +394,6 @@
         const theta = (i / STEPS) * Math.PI * 2;
         const ux = Math.cos(theta);
         const uy = Math.sin(theta);
-        // 行列 M*[ux, uy]^T
         const tx = a * ux + b * uy;
         const ty = c * ux + d * uy;
 
@@ -352,13 +418,17 @@
       ctx.fillText('あ', 0.5 * SCALE, -0.5 * SCALE);
       ctx.restore();
 
-      // --- 7. 基底ベクトル ---
-      drawArrow(p0, p1, '#e53935'); // e1 (赤)
-      drawArrow(p0, p3, '#43a047'); // e2 (緑)
+      // --- 7. 固有ベクトルの描画（大きさ:2, 太さ:1.5 [赤緑の半分], 色:cyan） ---
+      eigenVectors.forEach(vec => {
+        drawArrow(p0, vec, '#00bcd4', 1.5, 7);
+      });
+
+      // --- 8. 基底ベクトル（太さ:3 [標準]） ---
+      drawArrow(p0, p1, '#e53935', 3, 10); // e1 (赤)
+      drawArrow(p0, p3, '#43a047', 3, 10); // e2 (緑)
     }
 
-    function drawArrow(from, to, color) {
-      const headlen = 10;
+    function drawArrow(from, to, color, lineWidth = 3, headlen = 10) {
       const fromX = toScreenX(from.x);
       const fromY = toScreenY(from.y);
       const toX = toScreenX(to.x);
@@ -367,7 +437,7 @@
 
       ctx.strokeStyle = color;
       ctx.fillStyle = color;
-      ctx.lineWidth = 3;
+      ctx.lineWidth = lineWidth;
 
       ctx.beginPath();
       ctx.moveTo(fromX, fromY);
